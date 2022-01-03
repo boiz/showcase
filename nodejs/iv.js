@@ -1,5 +1,7 @@
 //dev.js
 
+//Pull data from SQL Server with express.js and handle a complicate array process
+
 const fs=require("fs")
 const express=require("express")
 const app=express()
