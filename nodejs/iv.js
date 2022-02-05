@@ -1,7 +1,5 @@
 //dev.js
 
-//Pull data from SQL Server with express.js and handle a complicate array process
-
 const fs=require("fs")
 const express=require("express")
 const app=express()
@@ -152,7 +150,7 @@ const calcInv=(values,f1056,f01)=>{
 
 }
 
-const goPromise=(d,f1056,callback)=>{
+const goPromise=(d,f1056,callback,callbackPromiseDone)=>{
 
   const q=getQ(d,f1056)
 
@@ -166,6 +164,14 @@ const goPromise=(d,f1056,callback)=>{
     new Promise((resolve,reject)=>lib.sqlQuery(lib.host,q.tlz,resolve)),
     new Promise((resolve,reject)=>lib.sqlQuery(lib.ipdi,q.lp,resolve))
   ]
+
+  let stepDone=[]
+
+  promise.forEach((x,i)=>x.then(res=>{
+    stepDone.push(i)
+    if(callbackPromiseDone) callbackPromiseDone(stepDone)
+
+  }))
 
   Promise.all(promise).then(callback)
 
@@ -218,62 +224,92 @@ const f01ToRow=(values,f1056,f01)=>{
 
   return {row,prop}
 
-
 }
 
-const writeProgress=(user,v)=>fs.writeFileSync(`ivLog/${user}`,v)
+const global={}
 
+const writeProgress=(user,v)=>{
+
+  //fs.writeFileSync(`ivLog/${user}`,v)
+  global[user]=v
+
+}
 
 const f01List=values=>lib.uniCol([values[0],values[1]].flat(),'F01')
 
 const big=(values,f1056,user,res)=>{
 
-  //values.forEach((x,i)=>console.log(x.length))
-
-  //lib.t('')
-
-  // const dd=1500
-  // let aa=f01List(values).splice(0,dd)
-
   let aa=f01List(values)
-
-  //aa=['0000000019363','0000000019374']
-
   const rows=[]
 
-  aa.forEach((x,i)=>{
+  // aa.forEach((x,i)=>{
 
-    const bb=i%50
-    const cc=i/aa.length
+  //   const bb=i%50
+    
+  //   const cc=i/aa.length/2+.5
 
-    if(!bb) writeProgress(user,cc.toString())
+  //   if(!bb) writeProgress(user,cc.toString())
 
-    const row=f01ToRow(values,f1056,x)
+  //   const row=f01ToRow(values,f1056,x)
 
-    if(row) rows.push(row)
+  //   if(row) rows.push(row)
 
-  })
+  // })
 
-  writeProgress(user,'1')
+  function processLargeArray(array) {
+    // set this to whatever number of items you can process at once
+    var chunk = 50
+    var index = 0
+    function doChunk() {
+        var cnt = chunk
+        while (cnt-- && index < array.length) {
+
+          const x=array[index]
+
+          const bb=index%50
+          
+          const dd=.4
+
+          const cc=index/aa.length/(1/(1-dd))+dd
+
+          if(!bb) writeProgress(user,cc.toString())
+
+          const row=f01ToRow(values,f1056,x)
+
+          if(row) rows.push(row)
 
 
-  setTimeout(()=>writeProgress(user,'0'),2000)
+          ++index
+        }
+        if (index < array.length) {
+            // set Timeout for async iteration
+            setTimeout(doChunk, 1)
+        }
+        else {
 
-  //console.log(rows)
+          writeProgress(user,'1')
+          //setTimeout(()=>writeProgress(user,'0'),2000)
+          if(res) res.send(rows)
 
-  //lib.t('')
+        }
+    } 
+    doChunk()
+  }
 
-  if(res) res.send(rows)
+  processLargeArray(aa)
+
   
 }
 
+const testMock=(user,res)=>{
 
-lib.txt2json('export/mock',values=>{
+  lib.txt2json('export/mock',values=>{
 
- //big(values,'003','liang')
+   big(values,'003',user,res)
 
-})
+  })
 
+}
 
 const writeMock=()=>{
 
@@ -283,29 +319,66 @@ const writeMock=()=>{
 
 }
 
-const testPromise=()=>{
+const testPromise=(user,res)=>{
+
+  let cc=0
 
   goPromise('12/1/2021','003',values=>{
-    big(values,'003','liang')
+    big(values,'003',user,res)
+  },stepDone=>{
+
+    const steps=5
+    const ddEnd=.4
+
+    const unit=ddEnd/steps
+
+    if(stepDone.includes(4)) cc+=3*unit
+    else cc+=2*unit/4
+
+    writeProgress(user,cc.toString())
   })
 
 }
 
+//writeProgress('liang','.10')
 
 //testPromise()
 //writeMock()
+//testMock('liang')
 
 app.post('/iv',upload.fields([]),(req,res)=>{
-  //lib.t('')
-
+  
+  let cc=0
   writeProgress(req.body.user,'0')
 
   goPromise(req.body.d,req.body.f1056,values=>{
 
     big(values,req.body.f1056,req.body.user,res)
 
+  },stepDone=>{
+
+    const steps=5
+    const ddEnd=.4
+
+    const unit=ddEnd/steps
+
+    if(stepDone.includes(4)) cc+=3*unit
+    else cc+=2*unit/4
+
+    writeProgress(req.body.user,cc.toString())
+
   })
 
+//testMock(req.body.user,res)
+//testPromise(req.body.user,res)
+
+})
+
+app.post('/ivLoading',upload.fields([]),(req,res)=>{
+
+  const str=global[req.body.user]
+
+  res.send({str})
 })
 
 
